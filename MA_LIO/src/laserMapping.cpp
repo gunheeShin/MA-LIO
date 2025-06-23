@@ -34,6 +34,9 @@
 #include "preprocess.h"
 #include "IMU_Processing.hpp"
 
+#include "data_recorder.h"
+#include <std_srvs/Trigger.h>
+
 #define INIT_TIME (0.1)
 #define LASER_POINT_COV (0.001)
 #define MAXN (720000)
@@ -107,6 +110,15 @@ nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
 geometry_msgs::Quaternion geoQuat;
 geometry_msgs::PoseStamped msg_body_pose;
+
+std::shared_ptr<DataRecorder<RecordPointType>> recorder_ptr_;
+ros::ServiceServer recorder_server_;
+
+std::string result_dir, dataset, data_id, test_topic, algorithm, param_set_name;
+std::vector<std::string> lidar_names;
+std::vector<int> lidar_indices;
+int save_frame_mode = 0; 
+std::string save_dir;
 
 shared_ptr<ImuProcess> p_imu(new ImuProcess());
 double total_distance = 0;
@@ -273,13 +285,26 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in)
 // In example case, there should be only two cbk_ function inside of the lidar_cbk_.
 // Especially, if user wants to use only 1 lidar, 
 // There is only one function inside of lidar_cbk_ function with two inputs for lidar_cbk_. 
-void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_,
-                const livox_ros_driver::CustomMsg::ConstPtr &livoxMsg_, const livox_ros_driver::CustomMsg::ConstPtr &livoxMsg2_)
+// void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_,
+//                 const livox_ros_driver::CustomMsg::ConstPtr &livoxMsg_, const livox_ros_driver::CustomMsg::ConstPtr &livoxMsg2_)
+// {
+//     standard_pcl_cbk(scanMsg_, 0);
+//     livox_pcl_cbk(livoxMsg_, 1);
+//     livox_pcl_cbk(livoxMsg2_, 2);
+// }
+#ifdef NTU_SINGLE
+void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_, const sensor_msgs::PointCloud2::ConstPtr &scanMsg2_)
 {
     standard_pcl_cbk(scanMsg_, 0);
-    livox_pcl_cbk(livoxMsg_, 1);
-    livox_pcl_cbk(livoxMsg2_, 2);
 }
+#elif NTU_MULTI
+void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_,
+                const sensor_msgs::PointCloud2::ConstPtr &scanMsg2_)
+{
+    standard_pcl_cbk(scanMsg_, 0);
+    standard_pcl_cbk(scanMsg2_, 1);
+}
+#endif
 
 /*** For UrbanNav Dataset (Case: LiDAR 2)***/
 /*void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_,
@@ -828,6 +853,71 @@ void visualize_state()
     std::cout << "\033[1;33m" << "[VSZ]: " << "\033[0m" << "\033[1;32m" << vm_usage << " MB" << "\033[0m" << "\n" << std::endl;
 }   
 
+void recordRamUsage(double stamp)
+{
+    pid_t pid = getpid();
+    std::string path = "/proc/" + std::to_string(pid) + "/status";
+    std::ifstream file(path);
+    std::string line;
+    double mem_usage = 0.0;
+    while (std::getline(file, line))
+    {
+        if (line.find("VmRSS:") == 0)
+        {
+            mem_usage = std::stod(line.substr(6)) / 1024.0; // Convert to MB
+            break;
+        }
+    }
+
+    recorder_ptr_->recordValue("RAM_usage", stamp, mem_usage);
+}
+
+void recordCloud() {
+
+    if (!recorder_ptr_->isCloudRecordEnabled())
+        return;
+
+    if (!recorder_ptr_->isInit()) {
+        std::cout << "Recorder is not initialized!" << std::endl;
+        return;
+    }
+
+    pcl::PointCloud<RecordPointType>::Ptr record_cloud(new pcl::PointCloud<RecordPointType>);
+    for (size_t i = 0; i < feats_down_body->points.size(); i++) {
+        RecordPointType point;
+        point.x = feats_down_body->points[i].x;
+        point.y = feats_down_body->points[i].y;
+        point.z = feats_down_body->points[i].z;
+        point.intensity = feats_down_body->points[i].intensity;
+
+        record_cloud->push_back(point);
+    }
+
+    recorder_ptr_->recordCloud(record_cloud, lidar_end_time);
+    recorder_ptr_->saveCloud();
+}
+
+bool data_recorder_callback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res)
+{
+    if (recorder_ptr_ != nullptr)
+    {
+
+        recorder_ptr_->savePose();
+        recorder_ptr_->saveTime();
+        recorder_ptr_->saveValue();
+        recorder_ptr_->saveStatus("Finished");
+
+        res.success = true;
+        res.message = "Data saved successfully.";
+    }
+    else
+    {
+        res.success = false;
+        res.message = "Recorder pointer is null, cannot save data.";
+    }
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "laserMapping");
@@ -899,7 +989,12 @@ int main(int argc, char **argv)
     // typedef message_filters::sync_policies::ApproximateTime<Your Msg1, Your Msg2> LidarSyncPolicy;
     // Especially, if you want to use only 1 lidar, define the ApproximateTime as
     // typedef message_filters::sync_policies::ApproximateTime<Your Msg1, Your Msg1> LidarSyncPolicy
-    typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LivoxMsgType, LivoxMsgType> LidarSyncPolicy;
+    // typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LivoxMsgType, LivoxMsgType> LidarSyncPolicy;
+
+    // if NTU_SINGLE or NTU_MULTI
+    #if defined(NTU_SINGLE) || defined(NTU_MULTI)
+    typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LidarMsgType> LidarSyncPolicy;
+    #endif
     typedef message_filters::Synchronizer<LidarSyncPolicy> Sync;
 
     // 2. Change the synchronizer based on sync_policies
@@ -907,10 +1002,21 @@ int main(int argc, char **argv)
     // Don't forget to change the registerCallback as (lidar_cbk_, _1, _2).
     // Especially, if you want to use only 1 lidar, Synchronizer should be written as
     // LidarSyncPolicy(10), *Your LiDAR[0], *Your LiDAR[0];
+    // message_filters::Synchronizer<LidarSyncPolicy> *sync =
+    //     new message_filters::Synchronizer<LidarSyncPolicy>(
+    //         LidarSyncPolicy(10), *sub_spin[0], *sub_livox[0], *sub_livox[1]);
+    // sync->registerCallback(boost::bind(&lidar_cbk_, _1, _2, _3));
+
+    #ifdef NTU_SINGLE
     message_filters::Synchronizer<LidarSyncPolicy> *sync =
         new message_filters::Synchronizer<LidarSyncPolicy>(
-            LidarSyncPolicy(10), *sub_spin[0], *sub_livox[0], *sub_livox[1]);
-    sync->registerCallback(boost::bind(&lidar_cbk_, _1, _2, _3));
+            LidarSyncPolicy(10), *sub_spin[0], *sub_spin[0]);
+    #elif NTU_MULTI
+    message_filters::Synchronizer<LidarSyncPolicy> *sync =
+        new message_filters::Synchronizer<LidarSyncPolicy>(
+            LidarSyncPolicy(10), *sub_spin[0], *sub_spin[1]);
+    #endif
+    sync->registerCallback(boost::bind(&lidar_cbk_, _1, _2));
 
     /*** For UrbanNav Dataset (Case: LiDAR 2)***/
     /*typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LidarMsgType> LidarSyncPolicy;
@@ -929,6 +1035,66 @@ int main(int argc, char **argv)
     ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/Odometry", 100000);
     ros::Publisher pubPath = nh.advertise<nav_msgs::Path>("/path", 100000);
     //------------------------------------------------------------------------------------------------------//
+
+    //----------------------------------------------------------------------------------------------------
+    // Data Recorder Configurations
+    nh.param<std::string>("data_recorder/result_dir", result_dir, "/");
+    nh.param<std::string>("data_recorder/dataset", dataset, "dataset");
+    nh.param<std::string>("data_recorder/data_id", data_id, "data_id");
+    nh.param<std::string>("data_recorder/test_topic", test_topic, "test_topic");
+    nh.param<std::string>("data_recorder/algorithm", algorithm, "fastlio");
+    nh.param<std::string>("data_recorder/param_set_name", param_set_name, "default");
+    nh.param<std::vector<std::string>>("data_recorder/lidar_names", lidar_names,
+                                       std::vector<std::string>());
+    nh.param<std::vector<int>>("data_recorder/lidar_indices", lidar_indices, std::vector<int>());
+    nh.param<int>("data_recorder/save_frame_mode", save_frame_mode, 0);
+
+    std::string lidars_combination = "";
+    for (auto &index : lidar_indices)
+    {
+        lidars_combination += lidar_names[index] + "_";
+    }
+    lidars_combination = lidars_combination.substr(0, lidars_combination.size() - 1);
+
+    save_dir = result_dir + "/" + dataset + "/" + data_id + "/" + test_topic + "/" + lidars_combination
+                + "/" + algorithm  + "/" + param_set_name;
+
+    // Check variables
+    std::cout << "\033[32m" << "Data Recorder Configurations:" << std::endl;
+    std::cout << "Result Directory: " << result_dir << std::endl;
+    std::cout << "Data ID: " << data_id << std::endl;
+    std::cout << "Test Topic: " << test_topic << std::endl;
+    std::cout << "Parameter Set Name: " << param_set_name << std::endl;
+    std::cout << "LiDAR Comb.: " << lidars_combination << std::endl;
+    std::cout << "Save Directory: " << save_dir << std::endl;
+    std::cout << "\033[0m" << std::endl;
+
+    recorder_ptr_.reset(new DataRecorder<RecordPointType>());
+    recorder_ptr_->init(save_dir, save_frame_mode, true);
+
+    recorder_server_ = nh.advertiseService("save_data", data_recorder_callback);
+
+    // Debug
+    std::string debug_dataset = "None";
+    int debug_lidar_num = 0;
+    #ifdef NTU_SINGLE
+    debug_dataset = "NTU";
+    debug_lidar_num = 1;
+    #elif NTU_MULTI
+    debug_dataset = "NTU";
+    debug_lidar_num = 2;
+    #endif
+
+    if(debug_dataset != dataset || debug_lidar_num != lidar_indices.size()){
+
+        std::cout << "\033[31m" << "Warning: Dataset or LiDAR number does not match! Check Cmakefile or launch file." << "\033[0m" << std::endl;
+        std::cout << "\033[31m" << "Congiguration: " << dataset << ", LiDARs: " << lidar_names.size() << "\033[0m" << std::endl;
+        std::cout << "\033[31m" << "Build with " << debug_dataset << ", LiDARs: " << debug_lidar_num << "\033[0m" << std::endl;
+        return -1;
+    }
+
+    //----------------------------------------------------------------------------------------------------
+
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
@@ -963,24 +1129,47 @@ int main(int argc, char **argv)
                 feats_down_vec[num] = feats_down;
             }
             /*** Undistortion ***/
-            p_imu->Process(Measures, kf, feats_undistort_vec);
+            // p_imu->Process(Measures, kf, feats_undistort_vec);
+            recorder_ptr_->recordTime([&]()
+                                      { p_imu->Process(Measures, kf, feats_undistort_vec); },
+                                      "imu_process", lidar_end_time);
             /*** Downsampling ***/
-            for (int num = 0; num < lid_num; num++)
+            // for (int num = 0; num < lid_num; num++)
+            // {
+            //     downSizeFilterSurf.setInputCloud(feats_undistort_vec[num]);
+            //     downSizeFilterSurf.filter(*feats_down_vec[num]);
+            //     for (auto i = 0; i < feats_down_vec[num]->points.size(); i++)
+            //     {
+            //         feats_down_vec[num]->points[i].normal_x = feats_down_vec[num]->points[i].intensity;
+            //         feats_down_vec[num]->points[i].intensity = num;
+            //     }
+            //     for (auto i = 0; i < feats_undistort_vec[num]->points.size(); i++)
+            //     {
+            //         feats_undistort_vec[num]->points[i].intensity = num;
+            //     }
+            //     *feats_undistort = *feats_undistort + *feats_undistort_vec[num];
+            //     *feats_down_body = *feats_down_body + *feats_down_vec[num];
+            // }
+
+            recorder_ptr_->recordTime([&]()
             {
-                downSizeFilterSurf.setInputCloud(feats_undistort_vec[num]);
-                downSizeFilterSurf.filter(*feats_down_vec[num]);
-                for (auto i = 0; i < feats_down_vec[num]->points.size(); i++)
+                for (int num = 0; num < lid_num; num++)
                 {
-                    feats_down_vec[num]->points[i].normal_x = feats_down_vec[num]->points[i].intensity;
-                    feats_down_vec[num]->points[i].intensity = num;
+                    downSizeFilterSurf.setInputCloud(feats_undistort_vec[num]);
+                    downSizeFilterSurf.filter(*feats_down_vec[num]);
+                    for (auto i = 0; i < feats_down_vec[num]->points.size(); i++)
+                    {
+                        feats_down_vec[num]->points[i].normal_x = feats_down_vec[num]->points[i].intensity;
+                        feats_down_vec[num]->points[i].intensity = num;
+                    }
+                    for (auto i = 0; i < feats_undistort_vec[num]->points.size(); i++)
+                    {
+                        feats_undistort_vec[num]->points[i].intensity = num;
+                    }
+                    *feats_undistort = *feats_undistort + *feats_undistort_vec[num];
+                    *feats_down_body = *feats_down_body + *feats_down_vec[num];
                 }
-                for (auto i = 0; i < feats_undistort_vec[num]->points.size(); i++)
-                {
-                    feats_undistort_vec[num]->points[i].intensity = num;
-                }
-                *feats_undistort = *feats_undistort + *feats_undistort_vec[num];
-                *feats_down_body = *feats_down_body + *feats_down_vec[num];
-            }
+            }, "downsample", lidar_end_time);
 
             feats_down_size = feats_down_body->points.size();
             state_point = kf.get_x();
@@ -1028,30 +1217,60 @@ int main(int argc, char **argv)
             pose_unc.clear();
             pose_unc.resize(lid_num);
             Pose pose_point;
-            for (int num = 0; num < lid_num; num++)
+            // for (int num = 0; num < lid_num; num++)
+            // {
+            //     if (num == 0)
+            //     {
+            //         for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
+            //             pose_unc[num].push_back(kf.lidar_uncertainty[num][i]);
+            //     }
+            //     else
+            //     {
+            //         for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
+            //         {
+            //             compoundPoseWithCov(extrinsic[num], extrinsic[num].cov_, kf.lidar_uncertainty[num][i], kf.lidar_uncertainty[num][i].cov_, pose_point, pose_point.cov_, 2);
+            //             compoundPoseWithCov(kf.temporal_comp[num - 1], kf.temporal_comp[num - 1].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
+            //             compoundInvPoseWithCov(extrinsic[0], extrinsic[0].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
+            //             pose_unc[num].push_back(pose_point);
+            //         }
+            //     }
+            // }
+
+            recorder_ptr_->recordTime([&]()
             {
-                if (num == 0)
+                for (int num = 0; num < lid_num; num++)
                 {
-                    for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
-                        pose_unc[num].push_back(kf.lidar_uncertainty[num][i]);
-                }
-                else
-                {
-                    for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
+                    if (num == 0)
                     {
-                        compoundPoseWithCov(extrinsic[num], extrinsic[num].cov_, kf.lidar_uncertainty[num][i], kf.lidar_uncertainty[num][i].cov_, pose_point, pose_point.cov_, 2);
-                        compoundPoseWithCov(kf.temporal_comp[num - 1], kf.temporal_comp[num - 1].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
-                        compoundInvPoseWithCov(extrinsic[0], extrinsic[0].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
-                        pose_unc[num].push_back(pose_point);
+                        for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
+                            pose_unc[num].push_back(kf.lidar_uncertainty[num][i]);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < (int)kf.lidar_uncertainty[num].size() - 1; i++)
+                        {
+                            compoundPoseWithCov(extrinsic[num], extrinsic[num].cov_, kf.lidar_uncertainty[num][i], kf.lidar_uncertainty[num][i].cov_, pose_point, pose_point.cov_, 2);
+                            compoundPoseWithCov(kf.temporal_comp[num - 1], kf.temporal_comp[num - 1].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
+                            compoundInvPoseWithCov(extrinsic[0], extrinsic[0].cov_, pose_point, pose_point.cov_, pose_point, pose_point.cov_, 2);
+                            pose_unc[num].push_back(pose_point);
+                        }
                     }
                 }
-            }
+            }, "pose_unc", lidar_end_time);
 
             double solve_H_time = 0;
             /*** iterated state estimation ***/
-            kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
-            extrinsic_update();
-            state_point = kf.get_x();
+            // kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
+            // extrinsic_update();
+            // state_point = kf.get_x();
+
+            recorder_ptr_->recordTime([&]()
+            {
+                kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
+                extrinsic_update();
+                state_point = kf.get_x();
+            }
+            , "kf_update", lidar_end_time);
 
             pos_lid = state_point.pos + state_point.rot * extrinsic_trans[0];
             geoQuat.x = state_point.rot.coeffs()[0];
@@ -1062,7 +1281,11 @@ int main(int argc, char **argv)
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
 
-            map_incremental();
+            // map_incremental();
+            recorder_ptr_->recordTime([&]()
+            {
+                map_incremental();
+            }, "map_incremental", lidar_end_time);
 
             visualize_state();
 
@@ -1070,6 +1293,17 @@ int main(int argc, char **argv)
             fout_out.precision(20);
             fout_out << Measures.lidar_end_time[2] << " " << state_point.pos(0) << " " << state_point.pos(1) << " " << state_point.pos(2) << " " << geoQuat.x << " " << geoQuat.y << " " << geoQuat.z << " " << geoQuat.w << std::endl; 
             
+            Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+            pose.block<3, 3>(0, 0) = state_point.rot.toRotationMatrix();
+            pose.block<3, 1>(0, 3) = state_point.pos;
+
+            Eigen::Matrix<double, 6, 6> pose_cov = kf.get_P().block<6, 6>(0, 0);
+
+            recorder_ptr_->recordPose(lidar_end_time, std::tie(pose, pose_cov));
+
+            recordRamUsage(lidar_end_time);
+            recordCloud();
+
             /******* Publish points *******/
             if (path_en)
                 publish_path(pubPath);

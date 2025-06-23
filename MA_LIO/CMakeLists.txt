@@ -80,6 +80,20 @@ catkin_package(
   INCLUDE_DIRS
 )
 
+set(NTU_SINGLE OFF)
+set(NTU_MULTI ON)
+
+if(NTU_SINGLE)
+  add_definitions(-DNTU_SINGLE)
+  message("NTU_SINGLE enabled")
+elseif(NTU_MULTI)
+  add_definitions(-DNTU_MULTI)
+  message("NTU_MULTI enabled")
+endif()
+
 add_executable(malio_mapping src/laserMapping.cpp src/BsplineSE3.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp src/parameters.cpp)
 target_link_libraries(malio_mapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES})
 target_include_directories(malio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
+
+target_link_libraries(malio_mapping /workspace/lio_baselines_ws/src/lio_baselines/include/data_recorder/build/libdata_recorder.so)
+target_include_directories(malio_mapping PRIVATE /workspace/lio_baselines_ws/src/lio_baselines/include/data_recorder)
