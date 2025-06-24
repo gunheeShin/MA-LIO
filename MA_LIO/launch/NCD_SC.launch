@@ -7,7 +7,7 @@
 
     <param name="feature_extract_enable" type="bool" value="0"/>
     <param name="max_iteration" type="int" value="3" />
-    <param name="filter_size_surf" type="double" value="0.5" />
+    <param name="filter_size_surf" type="double" value="2.0" />
     <param name="filter_size_map" type="double" value="0.5" />
     <param name="cube_side_length" type="double" value="1000" />
     <param name="plane_th" type="double" value="0.4" />
