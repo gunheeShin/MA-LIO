@@ -292,7 +292,7 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in)
 //     livox_pcl_cbk(livoxMsg_, 1);
 //     livox_pcl_cbk(livoxMsg2_, 2);
 // }
-#ifdef NTU_SINGLE
+#if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC)
 void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_, const sensor_msgs::PointCloud2::ConstPtr &scanMsg2_)
 {
     standard_pcl_cbk(scanMsg_, 0);
@@ -992,7 +992,7 @@ int main(int argc, char **argv)
     // typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LivoxMsgType, LivoxMsgType> LidarSyncPolicy;
 
     // if NTU_SINGLE or NTU_MULTI
-    #if defined(NTU_SINGLE) || defined(NTU_MULTI)
+    #if defined(NTU_SINGLE) || defined(NTU_MULTI) || defined(NCD_SC) || defined(NCD_MC)
     typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LidarMsgType> LidarSyncPolicy;
     #endif
     typedef message_filters::Synchronizer<LidarSyncPolicy> Sync;
@@ -1007,7 +1007,7 @@ int main(int argc, char **argv)
     //         LidarSyncPolicy(10), *sub_spin[0], *sub_livox[0], *sub_livox[1]);
     // sync->registerCallback(boost::bind(&lidar_cbk_, _1, _2, _3));
 
-    #ifdef NTU_SINGLE
+    #if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC)
     message_filters::Synchronizer<LidarSyncPolicy> *sync =
         new message_filters::Synchronizer<LidarSyncPolicy>(
             LidarSyncPolicy(10), *sub_spin[0], *sub_spin[0]);
@@ -1083,6 +1083,12 @@ int main(int argc, char **argv)
     #elif NTU_MULTI
     debug_dataset = "NTU";
     debug_lidar_num = 2;
+    #elif NCD_SC
+    debug_dataset = "NCD_SC";
+    debug_lidar_num = 1;
+    #elif NCD_MC
+    debug_dataset = "NCD_MC";
+    debug_lidar_num = 1;
     #endif
 
     if(debug_dataset != dataset || debug_lidar_num != lidar_indices.size()){
@@ -1287,7 +1293,7 @@ int main(int argc, char **argv)
                 map_incremental();
             }, "map_incremental", lidar_end_time);
 
-            visualize_state();
+            // visualize_state();
 
             prev_pos(0) = state_point.pos(0); prev_pos(1) = state_point.pos(1); prev_pos(2) = state_point.pos(2);
             fout_out.precision(20);

@@ -81,7 +81,9 @@ catkin_package(
 )
 
 set(NTU_SINGLE OFF)
-set(NTU_MULTI ON)
+set(NTU_MULTI OFF)
+set(NCD_MC ON)
+set(NCD_SC OFF)
 
 if(NTU_SINGLE)
   add_definitions(-DNTU_SINGLE)
@@ -89,6 +91,12 @@ if(NTU_SINGLE)
 elseif(NTU_MULTI)
   add_definitions(-DNTU_MULTI)
   message("NTU_MULTI enabled")
+elseif(NCD_MC)
+  add_definitions(-DNCD_MC)
+  message("NCD_MC enabled")
+elseif(NCD_SC)
+  add_definitions(-DNCD_SC)
+  message("NCD_SC enabled")
 endif()
 
 add_executable(malio_mapping src/laserMapping.cpp src/BsplineSE3.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp src/parameters.cpp)

@@ -1,10 +1,10 @@
 common:
-    lid_topic: ["/os1_cloud_node1/points", "/os1_cloud_node2/points"]
-    lid_type: [3, 3]              #1-Livox 2-Velodyne 3-Ouster
-    N_SCANS: [16, 16]
-    point_filter_num: [4, 4]
-    lid_num: 2
-    imu_topic: "/imu/imu"
+    lid_topic: ["/os_cloud_node/points"]
+    lid_type: [3]              #1-Livox 2-Velodyne 3-Ouster
+    N_SCANS: [16]
+    point_filter_num: [4]
+    lid_num: 1
+    imu_topic: "/os_cloud_node/imu"
     time_sync_en: false           # ONLY turn on when external time synchronization is really not possible
     time_offset_lidar_to_imu: 0.0 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
                                   # This param will take effect no matter what time_sync_en is. So if the time offset is not known exactly, please set as 0.0
@@ -21,10 +21,8 @@ mapping:
     fov_degree:    180
     det_range:     100.0
     extrinsic_est_en: true      # true: enable the online estimation of IMU-LiDAR extrinsic,
-    extrinsic_T: [-0.05, 0.0, 0.055,
-                -0.55, 0.03, 0.05]
-    extrinsic_R: [  1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.7071068, 0.7071068  ]
+    extrinsic_T: [-0.011, -0.02329, 0.04412]
+    extrinsic_R: [1.0, 0.0, 0.0, 0.0]
 
 publish:
     path_en:  true
@@ -49,11 +47,11 @@ cov_threshold: 0.5
 
 # data_recorder:
 #     result_dir: "/workspace/lbench/results"
-#     dataset: "NTU"
-#     data_id: "eee_01"
+#     dataset: "NCD_MC"
+#     data_id: "QuadMid_MC"
 #     test_topic: "baselines"
-#     lidar_names: ["OsHori","OsVert"]
-#     lidar_indices: [0,1]
+#     lidar_names: ["Os1"]
+#     lidar_indices: [0]
 #     algorithm: "malio"
 #     param_set_name: "default"
 #     save_frame_mode: 0 # 0: no save, 1: save entire frame at once, 2: save each frame
