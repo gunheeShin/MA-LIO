@@ -292,7 +292,7 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in)
 //     livox_pcl_cbk(livoxMsg_, 1);
 //     livox_pcl_cbk(livoxMsg2_, 2);
 // }
-#if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC)
+#if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC) || defined(Hanwha)
 void lidar_cbk_(const sensor_msgs::PointCloud2::ConstPtr &scanMsg_, const sensor_msgs::PointCloud2::ConstPtr &scanMsg2_)
 {
     standard_pcl_cbk(scanMsg_, 0);
@@ -992,7 +992,7 @@ int main(int argc, char **argv)
     // typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LivoxMsgType, LivoxMsgType> LidarSyncPolicy;
 
     // if NTU_SINGLE or NTU_MULTI
-    #if defined(NTU_SINGLE) || defined(NTU_MULTI) || defined(NCD_SC) || defined(NCD_MC)
+    #if defined(NTU_SINGLE) || defined(NTU_MULTI) || defined(NCD_SC) || defined(NCD_MC) || defined(Hanwha)
     typedef message_filters::sync_policies::ApproximateTime<LidarMsgType, LidarMsgType> LidarSyncPolicy;
     #endif
     typedef message_filters::Synchronizer<LidarSyncPolicy> Sync;
@@ -1007,7 +1007,7 @@ int main(int argc, char **argv)
     //         LidarSyncPolicy(10), *sub_spin[0], *sub_livox[0], *sub_livox[1]);
     // sync->registerCallback(boost::bind(&lidar_cbk_, _1, _2, _3));
 
-    #if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC)
+    #if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC) || defined(Hanwha)
     message_filters::Synchronizer<LidarSyncPolicy> *sync =
         new message_filters::Synchronizer<LidarSyncPolicy>(
             LidarSyncPolicy(10), *sub_spin[0], *sub_spin[0]);
@@ -1088,6 +1088,9 @@ int main(int argc, char **argv)
     debug_lidar_num = 1;
     #elif NCD_MC
     debug_dataset = "NCD_MC";
+    debug_lidar_num = 1;
+    #elif Hanwha
+    debug_dataset = "Hanwha";
     debug_lidar_num = 1;
     #endif
 

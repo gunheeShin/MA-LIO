@@ -82,8 +82,9 @@ catkin_package(
 
 set(NTU_SINGLE OFF)
 set(NTU_MULTI OFF)
-set(NCD_MC ON)
+set(NCD_MC OFF)
 set(NCD_SC OFF)
+set(Hanwha ON)
 
 if(NTU_SINGLE)
   add_definitions(-DNTU_SINGLE)
@@ -97,6 +98,9 @@ elseif(NCD_MC)
 elseif(NCD_SC)
   add_definitions(-DNCD_SC)
   message("NCD_SC enabled")
+elseif(Hanwha)
+  add_definitions(-DHanwha)
+  message("Hanwha enabled")
 endif()
 
 add_executable(malio_mapping src/laserMapping.cpp src/BsplineSE3.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp src/parameters.cpp)

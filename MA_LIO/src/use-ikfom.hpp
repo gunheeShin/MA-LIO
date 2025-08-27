@@ -26,7 +26,7 @@ typedef MTK::vect<2, double> vect2;
 // ((S2, grav))
 // );
 
-#if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC)
+#if defined(NTU_SINGLE) || defined(NCD_SC) || defined(NCD_MC) || defined(Hanwha)
 MTK_BUILD_MANIFOLD(state_ikfom,
 ((vect3, pos))
 ((SO3, rot))
