@@ -510,7 +510,6 @@ public:
 		{
 			dyn_share.valid = true;	
 			h_dyn_share(x_, dyn_share);
-			Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> R_dyn = dyn_share.R;
 			if(! dyn_share.valid)
 			{
 				continue; 
@@ -520,6 +519,7 @@ public:
 			#else
 				Eigen::Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> h_x_ = dyn_share.h_x;
 			#endif
+			Eigen::Matrix<scalar_type, Eigen::Dynamic, 1> R_dyn = dyn_share.R;
 			double solve_start = omp_get_wtime();
 			dof_Measurement = h_x_.rows();
 			vectorized_state dx;

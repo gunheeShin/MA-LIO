@@ -884,10 +884,24 @@ void recordCloud() {
 
     pcl::PointCloud<RecordPointType>::Ptr record_cloud(new pcl::PointCloud<RecordPointType>);
     for (size_t i = 0; i < feats_down_body->points.size(); i++) {
+        // RecordPointType point;
+        // point.x = feats_down_body->points[i].x;
+        // point.y = feats_down_body->points[i].y;
+        // point.z = feats_down_body->points[i].z;
+        // point.intensity = feats_down_body->points[i].intensity;
+
+        int lid_idx = feats_down_body->points[i].intensity;
+        V3D point_in_lidar(feats_down_body->points[i].x, feats_down_body->points[i].y, feats_down_body->points[i].z);
+        V3D point_in_imu;
+        if (lid_idx == 0)
+            point_in_imu = extrinsic_quat[0] * point_in_lidar + extrinsic_trans[0];
+        else if (lid_idx != 0)
+            point_in_imu = extrinsic_quat[1] * point_in_lidar + extrinsic_trans[1];
+
         RecordPointType point;
-        point.x = feats_down_body->points[i].x;
-        point.y = feats_down_body->points[i].y;
-        point.z = feats_down_body->points[i].z;
+        point.x = point_in_imu(0);
+        point.y = point_in_imu(1);
+        point.z = point_in_imu(2);
         point.intensity = feats_down_body->points[i].intensity;
 
         record_cloud->push_back(point);

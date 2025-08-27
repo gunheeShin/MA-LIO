@@ -38,7 +38,6 @@ namespace ouster_ros {
       PCL_ADD_POINT4D;
       float intensity;
       uint32_t t;
-      uint8_t  ring;
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 }  // namespace ouster_ros
@@ -51,7 +50,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (float, intensity, intensity)
     // use std::uint32_t to avoid conflicting with pcl::uint32_t
     (std::uint32_t, t, t)
-    (std::uint8_t, ring, ring)
 )
 
 class Preprocess
